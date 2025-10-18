@@ -229,32 +229,10 @@ function determineTimeSlotAndDate(now) {
     return { slot, minutes: h * 60 + m };
   }).sort((a, b) => a.minutes - b.minutes);
 
-  const firstSlotMinutes = slotsInMinutes[0].minutes;
-  const lastSlotMinutes = slotsInMinutes[slotsInMinutes.length - 1].minutes;
-
-  // 情況1: 在第一個時段之前（例如：08:00，第一時段是 09:00）
-  // → 歸類到當天的第一個時段
-  if (currentMinutes < firstSlotMinutes) {
-    return {
-      timeSlot: slotsInMinutes[0].slot,
-      date: targetDate.toISOString().split('T')[0]
-    };
-  }
-
-  // 情況2: 在最後一個時段之後（例如：22:00，最後時段是 21:00）
-  // → 歸類到隔天的第一個時段
-  if (currentMinutes >= lastSlotMinutes) {
-    targetDate.setDate(targetDate.getDate() + 1);
-    return {
-      timeSlot: slotsInMinutes[0].slot,
-      date: targetDate.toISOString().split('T')[0]
-    };
-  }
-
-  // 情況3: 在時段區間內
-  // → 找到當前所屬的時段（已過的最近時段）
-  for (let i = slotsInMinutes.length - 1; i >= 0; i--) {
-    if (currentMinutes >= slotsInMinutes[i].minutes) {
+  // 預報制：找到下一個時段
+  for (let i = 0; i < slotsInMinutes.length; i++) {
+    if (currentMinutes < slotsInMinutes[i].minutes) {
+      // 找到下一個時段
       return {
         timeSlot: slotsInMinutes[i].slot,
         date: targetDate.toISOString().split('T')[0]
@@ -262,7 +240,8 @@ function determineTimeSlotAndDate(now) {
     }
   }
 
-  // 預設回傳第一個時段（理論上不會到這裡）
+  // 如果已過所有時段，回傳隔天的第一個時段
+  targetDate.setDate(targetDate.getDate() + 1);
   return {
     timeSlot: slotsInMinutes[0].slot,
     date: targetDate.toISOString().split('T')[0]
