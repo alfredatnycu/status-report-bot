@@ -115,13 +115,12 @@ app.post('/webhook', async (req, res) => {
       return;
     }
 
-    // 儲存記錄
-    const timeSlot = determineTimeSlot(new Date());
-    saveRecord(studentId, status, timeSlot);
+    // 儲存記錄（使用正確的日期和時段）
+    const { timeSlot, date } = determineTimeSlotAndDate(new Date());
+    saveRecord(studentId, status, timeSlot, date);
 
     const studentName = getStudentName(studentId);
-    const today = new Date().toISOString().split('T')[0];
-    await replyLine(replyToken, `✅ ${studentName}(${studentId}) ${status}\n已登記 ${today} ${timeSlot} 時段`);
+    await replyLine(replyToken, `✅ ${studentName}(${studentId}) ${status}\n已登記 ${date} ${timeSlot} 時段`);
 
   } catch (error) {
     console.error('Webhook error:', error);
@@ -158,17 +157,16 @@ function getGroupId() {
 // ============================================
 // 儲存記錄
 // ============================================
-function saveRecord(studentId, status, timeSlot) {
+function saveRecord(studentId, status, timeSlot, date) {
   const records = readRecords();
-  const today = new Date().toISOString().split('T')[0];
 
   // 移除同日同時段同學員的舊記錄
   const filteredRecords = records.filter(r =>
-    !(r.date === today && r.timeSlot === timeSlot && r.studentId === studentId)
+    !(r.date === date && r.timeSlot === timeSlot && r.studentId === studentId)
   );
 
   const newRecord = {
-    date: today,
+    date,
     timeSlot,
     studentId,
     status,
@@ -216,13 +214,14 @@ function getStudentName(studentId) {
 // ============================================
 // 時段判斷（使用配置檔的時段設定）
 // ============================================
-function determineTimeSlot(now) {
+function determineTimeSlotAndDate(now) {
   const config = readConfig();
   const timeSlots = config.timeSlots || ["09:00", "16:00", "21:00"];
 
   // 台北時區 (UTC+8)
   const taipeiTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
   const currentMinutes = taipeiTime.getHours() * 60 + taipeiTime.getMinutes();
+  let targetDate = new Date(taipeiTime);
 
   // 轉換時段為分鐘數並排序
   const slotsInMinutes = timeSlots.map(slot => {
@@ -233,13 +232,33 @@ function determineTimeSlot(now) {
   // 找到目前所屬時段
   for (let i = 0; i < slotsInMinutes.length; i++) {
     if (currentMinutes < slotsInMinutes[i].minutes) {
-      // 如果還沒到第一個時段，回傳第一個時段
-      return i === 0 ? slotsInMinutes[slotsInMinutes.length - 1].slot : slotsInMinutes[i - 1].slot;
+      // 如果還沒到第一個時段，算前一天的最後時段
+      if (i === 0) {
+        targetDate.setDate(targetDate.getDate() - 1);
+        return {
+          timeSlot: slotsInMinutes[slotsInMinutes.length - 1].slot,
+          date: targetDate.toISOString().split('T')[0]
+        };
+      }
+      // 否則回傳前一個時段
+      return {
+        timeSlot: slotsInMinutes[i - 1].slot,
+        date: targetDate.toISOString().split('T')[0]
+      };
     }
   }
 
-  // 如果超過最後一個時段，回傳最後一個時段
-  return slotsInMinutes[slotsInMinutes.length - 1].slot;
+  // 如果超過最後一個時段，算隔天的第一個時段
+  targetDate.setDate(targetDate.getDate() + 1);
+  return {
+    timeSlot: slotsInMinutes[0].slot,
+    date: targetDate.toISOString().split('T')[0]
+  };
+}
+
+// 向後相容：只回傳時段
+function determineTimeSlot(now) {
+  return determineTimeSlotAndDate(now).timeSlot;
 }
 
 // ============================================
@@ -344,16 +363,15 @@ async function handleCommand(command, replyToken) {
 
 function generateReport() {
   const records = readRecords();
-  const today = new Date().toISOString().split('T')[0];
-  const currentSlot = determineTimeSlot(new Date());
+  const { timeSlot, date } = determineTimeSlotAndDate(new Date());
 
-  const todayRecords = records.filter(r => r.date === today && r.timeSlot === currentSlot);
+  const todayRecords = records.filter(r => r.date === date && r.timeSlot === timeSlot);
 
   if (todayRecords.length === 0) {
-    return `📊 ${today} ${currentSlot} 時段\n目前無人回報`;
+    return `📊 ${date} ${timeSlot} 時段\n目前無人回報`;
   }
 
-  let msg = `📊 ${today} ${currentSlot} 時段\n已回報：${todayRecords.length} 人\n\n`;
+  let msg = `📊 ${date} ${timeSlot} 時段\n已回報：${todayRecords.length} 人\n\n`;
 
   todayRecords.forEach(r => {
     msg += `${r.studentId} ${getStudentName(r.studentId)} - ${r.status}\n`;
@@ -365,12 +383,11 @@ function generateReport() {
 function getMissingStudents() {
   const records = readRecords();
   const roster = readRoster();
-  const today = new Date().toISOString().split('T')[0];
-  const currentSlot = determineTimeSlot(new Date());
+  const { timeSlot, date } = determineTimeSlotAndDate(new Date());
 
   const reportedIds = new Set(
     records
-      .filter(r => r.date === today && r.timeSlot === currentSlot)
+      .filter(r => r.date === date && r.timeSlot === timeSlot)
       .map(r => r.studentId)
   );
 
