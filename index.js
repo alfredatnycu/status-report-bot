@@ -11,6 +11,7 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const cron = require('node-cron');
 
 const app = express();
 app.use(express.json());
@@ -364,6 +365,15 @@ function generateReport() {
 
   const todayRecords = records.filter(r => r.date === date && r.timeSlot === timeSlot);
 
+  // 找到最後提交的記錄
+  let lastSubmitter = null;
+  if (todayRecords.length > 0) {
+    const sortedRecords = todayRecords.sort((a, b) =>
+      new Date(b.timestamp) - new Date(a.timestamp)
+    );
+    lastSubmitter = sortedRecords[0].studentId;
+  }
+
   // 建立已回報學員 ID 的 Set
   const reportedIds = new Set(todayRecords.map(r => r.studentId));
 
@@ -378,7 +388,8 @@ function generateReport() {
     if (reportedIds.has(student.id)) {
       // 找到該學員的回報記錄
       const record = todayRecords.find(r => r.studentId === student.id);
-      msg += `${student.id} - ${record.status}\n`;
+      const isLast = student.id === lastSubmitter ? ' 🏆最後提交' : '';
+      msg += `${student.id} - ${record.status}${isLast}\n`;
     } else {
       // 未回報
       msg += `${student.id} - 未回報\n`;
@@ -497,10 +508,84 @@ app.get('/api/report/today', (req, res) => {
 });
 
 // ============================================
+// 自動提醒功能
+// ============================================
+function setupAutoReminders() {
+  const config = readConfig();
+  const timeSlots = config.timeSlots || ["09:00", "16:00", "21:00"];
+
+  timeSlots.forEach(slot => {
+    const [hour, minute] = slot.split(':').map(Number);
+
+    // 計算提醒時間（時段前5分鐘）
+    let reminderMinute = minute - 5;
+    let reminderHour = hour;
+
+    if (reminderMinute < 0) {
+      reminderMinute += 60;
+      reminderHour -= 1;
+      if (reminderHour < 0) reminderHour = 23;
+    }
+
+    // 設定 cron 任務（台北時區 UTC+8）
+    const cronTime = `${reminderMinute} ${reminderHour} * * *`;
+
+    cron.schedule(cronTime, async () => {
+      console.log(`Auto reminder triggered for ${slot} time slot`);
+
+      const groupId = getGroupId();
+      if (!groupId) {
+        console.log('No group ID found, skipping reminder');
+        return;
+      }
+
+      const cfg = readConfig();
+      if (!cfg.systemEnabled) {
+        console.log('System disabled, skipping reminder');
+        return;
+      }
+
+      // 發送報表
+      const report = generateReport();
+      await pushToGroup(groupId, `⏰ 提醒：${slot} 時段即將開始\n\n${report}`);
+
+      // 發送未回報提醒
+      const records = readRecords();
+      const roster = readRoster();
+      const { timeSlot, date } = determineTimeSlotAndDate(new Date());
+
+      const reportedIds = new Set(
+        records
+          .filter(r => r.date === date && r.timeSlot === timeSlot)
+          .map(r => r.studentId)
+      );
+
+      const missing = roster.filter(s => !reportedIds.has(s.id));
+
+      if (missing.length > 0) {
+        let reminderMsg = `⚠️ 尚未回報名單（${missing.length}人）\n請盡快回報狀態：\n\n`;
+        missing.forEach(s => {
+          reminderMsg += `${s.id}\n`;
+        });
+        await pushToGroup(groupId, reminderMsg);
+      }
+    }, {
+      timezone: "Asia/Taipei"
+    });
+
+    console.log(`Scheduled reminder at ${reminderHour}:${reminderMinute.toString().padStart(2, '0')} for ${slot} time slot`);
+  });
+}
+
+// ============================================
 // 啟動伺服器
 // ============================================
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log('Webhook URL: /webhook');
   console.log('System status:', readConfig().systemEnabled ? 'Enabled' : 'Disabled');
+
+  // 啟動自動提醒
+  setupAutoReminders();
+  console.log('Auto reminders activated');
 });
