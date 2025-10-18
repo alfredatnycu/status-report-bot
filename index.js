@@ -95,14 +95,14 @@ app.post('/webhook', async (req, res) => {
     // 檢查系統是否啟動
     const config = readConfig();
     if (!config.systemEnabled) {
-      await replyLine(replyToken, '⏸️ 系統目前關閉中\n請使用 /start 啟動系統');
+      // 系統關閉時，靜默忽略回報訊息
       return;
     }
 
     // 處理回報：學員編號 狀態
     const match = userMsg.match(/^(\d+)\s+(.+)$/);
     if (!match) {
-      await replyLine(replyToken, '❌ 格式錯誤\n請輸入：學員編號 狀態\n例：33069 在家');
+      // 不符合格式，靜默忽略（不回應一般聊天訊息）
       return;
     }
 
@@ -111,7 +111,7 @@ app.post('/webhook', async (req, res) => {
 
     // 驗證學員編號
     if (!isValidStudent(studentId)) {
-      await replyLine(replyToken, `❌ 學員編號 ${studentId} 不在名冊中`);
+      // 不是有效學員編號，靜默忽略
       return;
     }
 
