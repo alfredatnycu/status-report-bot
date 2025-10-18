@@ -363,18 +363,30 @@ async function handleCommand(command, replyToken) {
 
 function generateReport() {
   const records = readRecords();
+  const roster = readRoster();
   const { timeSlot, date } = determineTimeSlotAndDate(new Date());
 
   const todayRecords = records.filter(r => r.date === date && r.timeSlot === timeSlot);
 
-  if (todayRecords.length === 0) {
-    return `📊 ${date} ${timeSlot} 時段\n目前無人回報`;
-  }
+  // 建立已回報學員 ID 的 Set
+  const reportedIds = new Set(todayRecords.map(r => r.studentId));
 
-  let msg = `📊 ${date} ${timeSlot} 時段\n已回報：${todayRecords.length} 人\n\n`;
+  // 統計人數
+  const reportedCount = todayRecords.length;
+  const missingCount = roster.length - reportedCount;
 
-  todayRecords.forEach(r => {
-    msg += `${r.studentId} ${getStudentName(r.studentId)} - ${r.status}\n`;
+  let msg = `📊 ${date} ${timeSlot} 時段\n已回報：${reportedCount} 人，未回報：${missingCount} 人\n\n`;
+
+  // 按學號排序顯示所有學員
+  roster.forEach(student => {
+    if (reportedIds.has(student.id)) {
+      // 找到該學員的回報記錄
+      const record = todayRecords.find(r => r.studentId === student.id);
+      msg += `${student.id} - ${record.status}\n`;
+    } else {
+      // 未回報
+      msg += `${student.id} - 未回報\n`;
+    }
   });
 
   return msg;
