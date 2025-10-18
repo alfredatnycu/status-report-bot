@@ -61,6 +61,11 @@ if (!fs.existsSync(CONFIG_FILE)) {
 // ============================================
 // LINE Webhook 入口
 // ============================================
+// Webhook 驗證端點（LINE 會先發送 GET 請求驗證）
+app.get('/webhook', (req, res) => {
+  res.status(200).send('Webhook endpoint is ready');
+});
+
 app.post('/webhook', async (req, res) => {
   try {
     // 立即回傳 200
