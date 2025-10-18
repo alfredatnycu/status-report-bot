@@ -1,0 +1,19 @@
+{
+  "name": "line-status-report-bot",
+  "version": "1.0.0",
+  "description": "LINE Bot 學員狀態回報系統",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node index.js"
+  },
+  "keywords": ["line-bot", "status-report"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
