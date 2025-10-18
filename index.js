@@ -280,7 +280,11 @@ async function handleCommand(command, replyToken) {
       const cfg = readConfig();
       cfg.systemEnabled = false;
       writeConfig(cfg);
-      await replyLine(replyToken, '⏸️ 系統已關閉\n已停止接受回報');
+
+      // 清空所有回報記錄
+      fs.writeFileSync(RECORDS_FILE, JSON.stringify([], null, 2));
+
+      await replyLine(replyToken, '⏸️ 系統已關閉\n已停止接受回報\n✅ 所有記錄已清空');
       break;
 
     case '/status':
