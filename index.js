@@ -381,7 +381,7 @@ function generateReport() {
   const reportedCount = todayRecords.length;
   const missingCount = roster.length - reportedCount;
 
-  let msg = `📊 ${date} ${timeSlot} 時段\n已回報：${reportedCount} 人，未回報：${missingCount} 人\n\n`;
+  let msg = `📊 ${date} ${timeSlot} 時段 第五班\n已回報：${reportedCount} 人，未回報：${missingCount} 人\n\n`;
 
   // 按學號排序顯示所有學員
   roster.forEach(student => {
