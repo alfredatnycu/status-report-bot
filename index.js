@@ -517,8 +517,8 @@ function setupAutoReminders() {
   timeSlots.forEach(slot => {
     const [hour, minute] = slot.split(':').map(Number);
 
-    // 計算提醒時間（時段前5分鐘）
-    let reminderMinute = minute - 5;
+    // 計算提醒時間（時段前15分鐘）
+    let reminderMinute = minute - 15;
     let reminderHour = hour;
 
     if (reminderMinute < 0) {
