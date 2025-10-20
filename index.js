@@ -121,7 +121,20 @@ app.post('/webhook', async (req, res) => {
     saveRecord(studentId, status, timeSlot, date);
 
     const studentName = getStudentName(studentId);
-    await replyLine(replyToken, `✅ ${studentName}(${studentId}) ${status}\n已登記 ${date} ${timeSlot} 時段`);
+
+    // 檢查是否全員已回報
+    const records = readRecords();
+    const roster = readRoster();
+    const todayRecords = records.filter(r => r.date === date && r.timeSlot === timeSlot);
+
+    let replyMsg = `✅ ${studentName}(${studentId}) ${status}\n已登記 ${date} ${timeSlot} 時段`;
+
+    // 如果全員已回報，提醒此人是最後一位
+    if (todayRecords.length === roster.length) {
+      replyMsg += `\n\n🎉 你是最後一位回報者\n請將本時段報表回報至大群組\n（輸入 /report 查看完整報表）`;
+    }
+
+    await replyLine(replyToken, replyMsg);
 
   } catch (error) {
     console.error('Webhook error:', error);
@@ -365,15 +378,6 @@ function generateReport() {
 
   const todayRecords = records.filter(r => r.date === date && r.timeSlot === timeSlot);
 
-  // 找到最後提交的記錄
-  let lastSubmitter = null;
-  if (todayRecords.length > 0) {
-    const sortedRecords = todayRecords.sort((a, b) =>
-      new Date(b.timestamp) - new Date(a.timestamp)
-    );
-    lastSubmitter = sortedRecords[0].studentId;
-  }
-
   // 建立已回報學員 ID 的 Set
   const reportedIds = new Set(todayRecords.map(r => r.studentId));
 
@@ -381,15 +385,14 @@ function generateReport() {
   const reportedCount = todayRecords.length;
   const missingCount = roster.length - reportedCount;
 
-  let msg = `📊 ${date} ${timeSlot} 時段 第五班\n已回報：${reportedCount} 人，未回報：${missingCount} 人\n\n`;
+  let msg = `${date} ${timeSlot} 第五班\n已回報：${reportedCount} 人，未回報：${missingCount} 人\n\n`;
 
   // 按學號排序顯示所有學員
   roster.forEach(student => {
     if (reportedIds.has(student.id)) {
       // 找到該學員的回報記錄
       const record = todayRecords.find(r => r.studentId === student.id);
-      const isLast = student.id === lastSubmitter ? ' 🏆最後提交' : '';
-      msg += `${student.id} - ${record.status}${isLast}\n`;
+      msg += `${student.id} - ${record.status}\n`;
     } else {
       // 未回報
       msg += `${student.id} - 未回報\n`;
